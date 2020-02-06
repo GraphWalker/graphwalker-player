@@ -51,8 +51,9 @@ The Websocket Sever will be started using the port `8887` in the example above.
  If your test runs on the same machine as your player, use `localhost`, otherwise, use the IP address to the machine where your tests is running.<br>
  Complete URL could look like :<br>
   * `file://<YOUR DOWNLOAD PATH ON YOUR COMPUTER>index.html?wsURI=<IP ADDRESS OF MACHINE RUNNING THE TEST>:<PORT USED BY WEBSOCKET SERVER IN YOUR TEST>`
-* Use that complete url in a web browser
-* The player will automatically connect to your test when it starts.
+* Use that complete url in a web browser<br>
+  ![](pics/url.png)
+* The player will automatically connect to your test when the test starts.
 
 ## The visualization
 

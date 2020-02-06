@@ -6,9 +6,9 @@ The GraphWalker player, will visualize your tests progress on a single web page.
 
 ## What you need to do in your test
 
-You need to add the GraphWalker Websocket Server to your test. There is an example in [PetClinc](https://github.com/GraphWalker/graphwalker-example/blob/master/java-petclinic/src/main/java/com/company/runners/WebSocketApplication.java)
+You need to add the GraphWalker Websocket Server to your test. There is an example in [PetClinic](https://github.com/GraphWalker/graphwalker-example/blob/master/java-petclinic/src/main/java/com/company/runners/WebSocketApplication.java)
 
-But in short, add the GraphWalker Websocket to your Maven project:
+But in short, add the GraphWalker Websocket maven dependency to your test project:
 
 ```xml
 <dependency>

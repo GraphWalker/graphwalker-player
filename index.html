@@ -1,0 +1,427 @@
+<!--
+GraphWalker WebSocket Player
+
+Save this file to disk.
+Open in webbrowser. Add host and port of Graphwalker test, like:
+file:///home/krikar/dev/graphwalker/graphwalker-player/index.html?wsURI=localhost:8887
+
+In your test, add the org.graphwalker.websocket.WebSocketServer, like:
+
+    public static void main(String[] args) throws IOException, InterruptedException {
+        Executor executor = new TestExecutor(PetClinic.class,
+                FindOwners.class,
+                NewOwner.class,
+                OwnerInformation.class,
+                Veterinariens.class);
+
+        WebSocketServer server = new WebSocketServer(8887, executor.getMachine());
+        server.start();
+
+        Result result = executor.execute(true);
+        if (result.hasErrors()) {
+            for (String error : result.getErrors()) {
+                System.out.println(error);
+            }
+        }
+        System.out.println("Done: [" + result.getResults().toString(2) + "]");
+    }
+
+
+Copyright (C) 2005 - 2020 GraphWalker
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+-->
+
+
+<!doctype html>
+
+<html>
+
+<head>
+    <title>GraphWalker Player</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.9.4/cytoscape.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+</head>
+
+<style>
+    #cy {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        top: 0px;
+        left: 0px;
+    }
+</style>
+
+<body>
+    <div>
+        <p id="modelAndGenerator"></p>
+        <p id="stepsAndFullfilment"></p>
+        <p id="message"></p>
+    </div>
+
+    <div id="cy"></div>
+
+    <script>
+        var jsonModels;
+
+        function getUrlVars() {
+            var vars = {};
+            var parts = window.location.href.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (m, key, value) {
+                vars[key] = value;
+            });
+            return vars;
+        }
+
+        function doSend(message) {
+            console.log('doSend: ' + message);
+
+            // Wait until the state of the socket is not ready and send the message when it is...
+            waitForSocketConnection(websocket, function () {
+                websocket.send(message);
+            });
+        }
+
+        // Make the function wait until the connection is made...
+        function waitForSocketConnection(socket, callback) {
+            setTimeout(function () {
+                if (socket.readyState === 1) {
+                    console.log("Connection is made");
+                    if (callback != null) {
+                        callback();
+                    }
+                    return;
+                } else {
+                    waitForSocketConnection(socket, callback);
+                }
+            }, 5); // wait 5 milisecond for the connection...
+        }
+
+        function connectWebSocket() {
+            console.log('Will try to connect to: ' + wsUri);
+            document.getElementById('message').innerHTML = 'Will try to connect to: ' + wsUri;
+
+            websocket = new WebSocket(wsUri);
+
+            websocket.onopen = function (evt) {
+                onOpen(evt);
+            };
+            websocket.onclose = function (evt) {
+                onClose(evt);
+            };
+            websocket.onmessage = function (evt) {
+                onMessage(evt);
+            };
+        }
+
+        function onOpen(evt) {
+            console.log('onOpen: ' + evt.data);
+            document.getElementById('message').innerHTML = 'Connected to: ' + wsUri;
+            var updateAllElements = {
+                command: 'getmodel'
+            };
+            doSend(JSON.stringify(updateAllElements));
+        }
+
+        function onClose(evt) {
+            console.log('Socket is closed. Reconnect will be attempted in 1 second.');
+            document.getElementById('message').innerHTML = 'Cannot connect to: ' + wsUri + ' Will retry in 1 second.';
+
+            setTimeout(function () {
+                connectWebSocket();
+            }, 1000);
+        }
+
+        function onMessage(event) {
+            console.log('onMessage: ' + event.data);
+            var message = JSON.parse(event.data);
+
+            switch (message.command) {
+                case 'getmodel':
+                    if (message.success) {
+                        console.log('Command getModel ok');
+
+                        cy.elements().remove();
+                        cy.reset();
+
+                        readGraphFromJSON(JSON.parse(message.models));
+                        var layout = cy.layout({
+                            name: 'breadthfirst'
+                        });
+                        layout.run();
+
+                        var updateAllElements = {
+                            command: 'updateAllElements'
+                        };
+                        doSend(JSON.stringify(updateAllElements));
+                    }
+                    break;
+
+                case 'updateallelements':
+                    console.log('updateallelements');
+                    if (message.success) {
+                        for (var index in message.elements) {
+                            if (message.elements[index].visitedCount > 0) {
+                                cy.$('#' + message.elements[index].modelId + '-' + message.elements[index].elementId).data('color', 'lightgray');
+                            }
+                        }
+                    }
+                    break;
+
+                case 'visitedElement':
+                    console.log('Command visitedElement. Will color green on (modelId, elementId): ' + message.modelId + ', ' + message.elementId);
+
+                    var modelNames = $.grep(jsonModels, function (n, i) {
+                        return n.id === message.modelId;
+                    });
+                    elementId = message.modelId + '-' + message.elementId;
+                    document.getElementById('modelAndGenerator').innerHTML = '<strong>Model:</strong> ' + modelNames[0].name + ', <strong>Element:</strong> ' + cy.$('#' + elementId).data('name') + ' (' + message.elementId + ')';
+
+                    cy.nodes().unselect();
+                    cy.edges().unselect();
+                    cy.$('#' + elementId).data('color', 'lightgrey');
+                    cy.$('#' + elementId).select();
+
+                    var str = '<strong>Steps:</strong> ' + message.totalCount + ', <strong>Fulfilment:</strong> ' + (message.stopConditionFulfillment * 100).toFixed(0) + '%';
+                    if (!jQuery.isEmptyObject(message.data)) {
+                        str += ', <strong>Data</strong>: ' + JSON.stringify(message.data);
+                    }
+                    document.getElementById('stepsAndFullfilment').innerHTML = str;
+
+                default:
+                    break;
+            }
+        }
+
+        function doSend(message) {
+            console.log('doSend: ' + message);
+
+            // Wait until the state of the socket is not ready and send the message when it is...
+            waitForSocketConnection(websocket, function () {
+                websocket.send(message);
+            });
+        }
+
+        // Make the function wait until the connection is made...
+        function waitForSocketConnection(socket, callback) {
+            setTimeout(function () {
+                if (socket.readyState === 1) {
+                    console.log("Connection is made");
+                    if (callback != null) {
+                        callback();
+                    }
+                    return;
+                } else {
+                    waitForSocketConnection(socket, callback);
+                }
+            }, 5); // wait 5 milisecond for the connection...
+        }
+
+        function readGraphFromJSON(jsonGraphs) {
+            jsonModels = jsonGraphs.models;
+
+            for (var modelIndex = 0; modelIndex < jsonModels.length; modelIndex++) {
+                var jsonModel = jsonModels[modelIndex];
+
+                var id, name;
+                if (jsonModel.hasOwnProperty('id')) {
+                    id = jsonModel.id;
+                } else {
+                    id = generateUUID();
+                }
+                if (jsonModel.hasOwnProperty('name')) {
+                    name = jsonModel.name;
+                } else {
+                    name = 'Model: ' + modelIndex;
+                }
+
+                var jsonVertices = jsonModel.vertices;
+                for (var i = 0; i < jsonVertices.length; i++) {
+                    var jsonVertex = jsonVertices[i];
+                    var x = 0,
+                        y = 0;
+                    if (jsonVertex.properties !== undefined) {
+                        if (jsonVertex.properties.x !== undefined) {
+                            x = jsonVertex.properties.x;
+                        }
+                        if (jsonVertex.properties.y !== undefined) {
+                            y = jsonVertex.properties.y;
+                        }
+                    } else {
+                        jsonVertex.properties = {};
+                    }
+
+                    var vertexActions = '';
+                    var vertexRequirements = '';
+
+                    if (jsonVertex.hasOwnProperty('actions')) {
+                        vertexActions = jsonVertex.actions.join('');
+                    }
+                    if (jsonVertex.hasOwnProperty('requirements')) {
+                        vertexRequirements = jsonVertex.requirements.join();
+                    }
+
+                    cy.add({
+                        group: 'nodes',
+                        data: {
+                            id: id + '-' + jsonVertex.id,
+                            label: jsonVertex.name,
+                            name: formatElementName({
+                                name: jsonVertex.name,
+                                sharedState: jsonVertex.sharedState,
+                                actions: jsonVertex.actions,
+                                requirements: jsonVertex.requirements
+                            }),
+                            sharedState: jsonVertex.sharedState,
+                            actions: vertexActions,
+                            requirements: vertexRequirements,
+                            properties: jsonVertex.properties,
+                            color: 'lightblue'
+                        }
+                    });
+                }
+                var jsonEdges = jsonModel.edges;
+                for (i = 0; i < jsonEdges.length; i++) {
+                    var jsonEdge = jsonEdges[i];
+
+                    // If source vertex is undefined, assume start vertex
+                    if (jsonEdge.sourceVertexId === undefined || jsonEdge.sourceVertexId === null) {
+                        jsonEdge.sourceVertexId = 'Start';
+
+                        cy.add({
+                            group: 'nodes',
+                            data: {
+                                id: id + '-' + jsonEdge.sourceVertexId,
+                                name: 'Start',
+                                startVertex: true,
+                                color: 'LightGrey'
+                            }
+                        });
+                    }
+
+                    var edgeActions = '';
+                    var edgeRequirements = '';
+
+                    if (jsonEdge.hasOwnProperty('actions')) {
+                        edgeActions = jsonEdge.actions.join('');
+                    }
+                    if (jsonEdge.hasOwnProperty('requirements')) {
+                        edgeRequirements = jsonEdge.requirements.join();
+                    }
+
+                    cy.add({
+                        group: 'edges',
+                        data: {
+                            id: id + '-' + jsonEdge.id,
+                            source: id + '-' + jsonEdge.sourceVertexId,
+                            target: id + '-' + jsonEdge.targetVertexId,
+                            label: jsonEdge.name,
+                            name: formatElementName({
+                                name: jsonEdge.name,
+                                guard: jsonEdge.guard,
+                                actions: jsonEdge.actions
+                            }),
+                            guard: jsonEdge.guard,
+                            actions: edgeActions,
+                            requirements: edgeRequirements,
+                            properties: jsonEdge.properties,
+                            color: 'lightblue'
+                        }
+                    });
+                }
+            }
+        }
+
+        var simpleFormat = true;
+
+        function formatElementName(jsonObj) {
+            var str = '';
+            if (simpleFormat) {
+                if (jsonObj.name) {
+                    return jsonObj.name;
+                }
+            } else {
+                if (jsonObj.name) {
+                    str += 'Name: ' + jsonObj.name + '\n';
+                }
+                if (jsonObj.sharedState) {
+                    str += 'Shared state name: ' + jsonObj.sharedState + '\n';
+                }
+                if (jsonObj.guard) {
+                    str += 'Guard: ' + jsonObj.guard + '\n';
+                }
+                if (jsonObj.actions) {
+                    str += 'Actions: ' + jsonObj.actions + '\n';
+                }
+                if (jsonObj.requirements) {
+                    str += 'Requirements: ' + jsonObj.requirements + '\n';
+                }
+                return str.slice(0, -1);
+            }
+            return '';
+        }
+
+
+        var cy = cytoscape({
+            container: document.getElementById('cy'),
+            style: cytoscape.stylesheet().selector('core').css({
+                //'active-bg-size': 0 // remove the grey circle when panning
+            }).selector('node').css({
+                'content': 'data(name)',
+                'text-wrap': 'wrap',
+                'text-valign': 'center',
+                'text-halign': 'center',
+                'shape': 'roundrectangle',
+                'width': 'label',
+                'height': 'label',
+                'color': 'black',
+                'background-color': 'data(color)',
+                'line-color': 'data(color)',
+                'padding-left': '10',
+                'padding-right': '10',
+                'padding-top': '10',
+                'padding-bottom': '10'
+            }).selector('edge').css({
+                'content': 'data(name)',
+                'text-wrap': 'wrap',
+                'curve-style': 'bezier',
+                'text-rotation': 'autorotate',
+                'target-arrow-shape': 'triangle',
+                'width': '4',
+                'line-color': 'data(color)',
+                'target-arrow-color': 'data(color)',
+                'background-color': 'data(color)'
+            }).selector(':selected').css({
+                'border-width': 4,
+                'border-color': 'black',
+                'line-color': 'black',
+                'target-arrow-color': 'black'
+            })
+        });
+
+        var wsUri = '';
+        $(document).ready(function () {
+            console.log("ready!");
+            wsUri = 'ws://' + getUrlVars()["wsURI"];
+            connectWebSocket();
+        });
+    </script>
+</body>
+
+</html>

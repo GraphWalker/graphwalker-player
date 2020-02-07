@@ -65,6 +65,11 @@ The Websocket Sever will be started using the port `8887` in the example above.
 ## Troubleshooting, Problems and 'Gotchas'
 
 * The Player does not connect to the test.<br>
+  Make sure that you have given the right address and port number.<br>
+  Your url must end with the `wsURI`parameter and data, for example:<br>
+  `file:///tmp//index.html?wsURI=localhost:8887`<br>
+  where `?wsURI=localhost:8887` is added to the url, if the test is running on `localhost` and the WebSocket server is using `8887` as the port number.
+* The Player does not connect to the test.<br>
   Make sure that your test could bind to the port when launching. Look out for the<br>
   `java.net.BindException: Address already in use`<br>
   Reload the Player in the browser, and wait a little while until the operating system releases the port, and then re-run your test.

@@ -61,3 +61,10 @@ The Websocket Sever will be started using the port `8887` in the example above.
 * When a vertex or edge is visited, it vill be colored light gray..
 * An edge or vertex currently being executed by the test  will be highlighted with a black border.
 * When many models are used, the will be placed next to each other by the Player. In ranomd order, and using a grid layout for the individual model.
+
+## Troubleshooting, Problems and 'Gotchas'
+
+* The Player does not connect to the test.<br>
+  Make sure that your test could bind to the port when launching. Look out for the<br>
+  `java.net.BindException: Address already in use`<br>
+  Reload the Player in the browser, and wait a little while until the operating system releases the port, and then re-run your test.

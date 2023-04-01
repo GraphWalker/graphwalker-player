@@ -14,7 +14,7 @@ But in short, add the GraphWalker Websocket maven dependency to your test projec
 <dependency>
    <groupId>org.graphwalker</groupId>
    <artifactId>graphwalker-websocket</artifactId>
-   <version>4.1.0</version>
+   <version>4.3.2</version>
 </dependency>
 ```
 

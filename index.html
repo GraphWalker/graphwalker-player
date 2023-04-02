@@ -418,7 +418,9 @@ THE SOFTWARE.
         var wsUri = '';
         $(document).ready(function () {
             console.log("ready!");
-            wsUri = 'ws://' + getUrlVars()["wsURI"];
+            const urlVars = getUrlVars();
+            const isEmpty = Object.keys(urlVars).length === 0;
+            wsUri = `ws://${isEmpty ? 'localhost:8887' : urlVars["wsURI"]}`;
             connectWebSocket();
         });
     </script>
